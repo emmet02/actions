@@ -1,0 +1,75 @@
+name: Reusable prek autoupdate
+
+on:
+    workflow_call:
+        inputs:
+            branch_name:
+                description: "The branch to create for the PR"
+                required: false
+                default: "bot/prek-autoupdate"
+                type: string
+
+jobs:
+    update:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                   enable-cache: true
+
+            - name: Install dependencies
+              run: uv sync --dev
+
+            - name: Run prek autoupdate
+              id: autoupdate
+              run: |
+                  {
+                    echo 'UPDATE_LOG<<EOF'
+                    uv run prek autoupdate
+                    echo 'EOF'
+                  } >> "$GITHUB_ENV"
+
+            - name: Check for changes
+              id: git-check
+              run: |
+                  if [ -n "$(git status --porcelain .pre-commit-config.yaml)" ]; then
+                    echo "changed=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "changed=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Create Pull Request
+              if: steps.git-check.outputs.changed == 'true'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  BRANCH_NAME="${{ inputs.branch_name }}"
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+                  git checkout -b "$BRANCH_NAME"
+                  git add .pre-commit-config.yaml
+                  git commit -m "chore(deps): update pre-commit hooks"
+
+                  git push origin "$BRANCH_NAME" --force
+
+                  gh pr create \
+                    --title "chore(deps): update pre-commit hooks" \
+                    --body "Update pre-commit hooks using \`prek autoupdate\`.
+                    
+                    ### Update Summary:
+                    \`\`\`
+                    ${{ env.UPDATE_LOG }}
+                    \`\`\`" \
+                    --head "$BRANCH_NAME" \
+                    --base main \
+                    --label "dependencies" \
+                    || echo "PR already exists"
