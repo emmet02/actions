@@ -59,12 +59,34 @@ jobs:
 
           git push origin "$BRANCH_NAME" --force
 
-          PR_BODY="Update pre-commit hooks using \`prek autoupdate\`.
+          # Parse the UPDATE_LOG to extract signal from noise
+          # Use escaped backticks to satisfy shellcheck SC2016
+          UPDATES=$(echo "$UPDATE_LOG" | grep "updating" | sed -E "s/.*\/([^/]+)\] updating (.*) -> (.*)/- **\1**: \`\2\` → \`\3\`/" || true)
+          UNCHANGED=$(echo "$UPDATE_LOG" | grep "already up to date" | sed -E "s/.*\/([^/]+)\] .*/- \1/" || true)
+          UNCHANGED_COUNT=$(echo "$UNCHANGED" | grep -c "^-" || echo 0)
 
-          ### Latest Update Summary:
-          \`\`\`
-          ${{ env.UPDATE_LOG }}
-          \`\`\`"
+          # Construct PR body in a YAML-safe way using a heredoc or multiple echos
+          {
+            echo "## 🚀 Pre-commit Hook Updates"
+            echo ""
+            echo "Update pre-commit hooks using \`prek autoupdate\`."
+            echo ""
+            echo "### ✅ Applied Updates"
+            echo "${UPDATES:-*No hook updates detected in log.*}"
+          } > pr_body.txt
+
+          if [ "$UNCHANGED_COUNT" -gt 0 ]; then
+            {
+              echo ""
+              echo "<details>"
+              echo "<summary>🔍 View $UNCHANGED_COUNT unchanged hooks</summary>"
+              echo ""
+              echo "$UNCHANGED"
+              echo "</details>"
+            } >> pr_body.txt
+          fi
+
+          PR_BODY=$(cat pr_body.txt)
 
           # Create PR if it doesn't exist, otherwise update the body of the existing one
           gh pr create \
