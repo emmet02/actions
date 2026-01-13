@@ -25,15 +25,12 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install prek
-        run: uv add prek
-
       - name: Run prek autoupdate
         id: autoupdate
         run: |
           {
             echo 'UPDATE_LOG<<EOF'
-            uv run --with prek prek autoupdate
+            uv run --with prek prek autoupdate 2>&1
             echo 'EOF'
           } >> "$GITHUB_ENV"
 
@@ -55,21 +52,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -b "$BRANCH_NAME"
+          # Force reset to main and create/reset the bot branch
+          git checkout -B "$BRANCH_NAME"
           git add .pre-commit-config.yml
           git commit -m "chore(deps): update pre-commit hooks"
 
           git push origin "$BRANCH_NAME" --force
 
+          PR_BODY="Update pre-commit hooks using \`prek autoupdate\`.
+
+          ### Latest Update Summary:
+          \`\`\`
+          ${{ env.UPDATE_LOG }}
+          \`\`\`"
+
+          # Create PR if it doesn't exist, otherwise update the body of the existing one
           gh pr create \
             --title "chore(deps): update pre-commit hooks" \
-            --body "Update pre-commit hooks using \`prek autoupdate\`.
-            
-            ### Update Summary:
-            \`\`\`
-            ${{ env.UPDATE_LOG }}
-            \`\`\`" \
+            --body "$PR_BODY" \
             --head "$BRANCH_NAME" \
             --base main \
-            --label "dependencies" \
-            || echo "PR already exists"
+            --label "dependencies" || \
+          gh pr edit "$BRANCH_NAME" --body "$PR_BODY"
