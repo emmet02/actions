@@ -64,22 +64,28 @@ jobs:
           UNCHANGED=$(echo "$UPDATE_LOG" | grep "already up to date" | sed -E 's/.*\/([^/]+)\] .*/- \1/' || true)
           UNCHANGED_COUNT=$(echo "$UNCHANGED" | grep -c "^-" || echo 0)
 
-          PR_BODY="## 🚀 Pre-commit Hook Updates
-
-          Update pre-commit hooks using \`prek autoupdate\`.
-
-          ### ✅ Applied Updates
-          ${UPDATES:-*No hook updates detected in log.*}"
+          # Construct PR body in a YAML-safe way using a heredoc or multiple echos
+          {
+            echo "## 🚀 Pre-commit Hook Updates"
+            echo ""
+            echo "Update pre-commit hooks using \`prek autoupdate\`."
+            echo ""
+            echo "### ✅ Applied Updates"
+            echo "${UPDATES:-*No hook updates detected in log.*}"
+          } > pr_body.txt
 
           if [ "$UNCHANGED_COUNT" -gt 0 ]; then
-            PR_BODY="$PR_BODY
-
-          <details>
-          <summary>🔍 View $UNCHANGED_COUNT unchanged hooks</summary>
-
-          $UNCHANGED
-          </details>"
+            {
+              echo ""
+              echo "<details>"
+              echo "<summary>🔍 View $UNCHANGED_COUNT unchanged hooks</summary>"
+              echo ""
+              echo "$UNCHANGED"
+              echo "</details>"
+            } >> pr_body.txt
           fi
+
+          PR_BODY=$(cat pr_body.txt)
 
           # Create PR if it doesn't exist, otherwise update the body of the existing one
           gh pr create \
