@@ -59,12 +59,27 @@ jobs:
 
           git push origin "$BRANCH_NAME" --force
 
-          PR_BODY="Update pre-commit hooks using \`prek autoupdate\`.
+          # Parse the UPDATE_LOG to extract signal from noise
+          UPDATES=$(echo "$UPDATE_LOG" | grep "updating" | sed -E 's/.*\/([^/]+)\] updating (.*) -> (.*)/- **\1**: `\2` → `\3`/' || true)
+          UNCHANGED=$(echo "$UPDATE_LOG" | grep "already up to date" | sed -E 's/.*\/([^/]+)\] .*/- \1/' || true)
+          UNCHANGED_COUNT=$(echo "$UNCHANGED" | grep -c "^-" || echo 0)
 
-          ### Latest Update Summary:
-          \`\`\`
-          ${{ env.UPDATE_LOG }}
-          \`\`\`"
+          PR_BODY="## 🚀 Pre-commit Hook Updates
+
+          Update pre-commit hooks using \`prek autoupdate\`.
+
+          ### ✅ Applied Updates
+          ${UPDATES:-*No hook updates detected in log.*}"
+
+          if [ "$UNCHANGED_COUNT" -gt 0 ]; then
+            PR_BODY="$PR_BODY
+
+          <details>
+          <summary>🔍 View $UNCHANGED_COUNT unchanged hooks</summary>
+
+          $UNCHANGED
+          </details>"
+          fi
 
           # Create PR if it doesn't exist, otherwise update the body of the existing one
           gh pr create \
