@@ -24,6 +24,10 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            **/uv.lock
+            **/requirements*.txt
+            .pre-commit-config.y*ml
 
       - name: Run prek autoupdate
         id: autoupdate
@@ -37,7 +41,7 @@ jobs:
       - name: Check for changes
         id: git-check
         run: |
-          if [ -n "$(git status --porcelain .pre-commit-config.yml)" ]; then
+          if [ -n "$(git status --porcelain .pre-commit-config.y*ml)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -54,7 +58,7 @@ jobs:
 
           # Force reset to main and create/reset the bot branch
           git checkout -B "$BRANCH_NAME"
-          git add .pre-commit-config.yml
+          git add .pre-commit-config.y*ml
           git commit -m "chore(deps): update pre-commit hooks"
 
           git push origin "$BRANCH_NAME" --force
