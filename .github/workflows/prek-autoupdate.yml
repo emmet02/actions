@@ -33,14 +33,14 @@ jobs:
               run: |
                   {
                     echo 'UPDATE_LOG<<EOF'
-                    uv run prek autoupdate
+                    uv --with prek run prek autoupdate
                     echo 'EOF'
                   } >> "$GITHUB_ENV"
 
             - name: Check for changes
               id: git-check
               run: |
-                  if [ -n "$(git status --porcelain .pre-commit-config.yaml)" ]; then
+                  if [ -n "$(git status --porcelain .pre-commit-config.yml)" ]; then
                     echo "changed=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "changed=false" >> "$GITHUB_OUTPUT"
