@@ -25,8 +25,8 @@ jobs:
               with:
                    enable-cache: true
 
-            - name: Install dependencies
-              run: uv sync --dev
+            - name: Install prek
+              run: uv add prek
 
             - name: Run prek autoupdate
               id: autoupdate
