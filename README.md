@@ -10,6 +10,23 @@ Automates the updating of pre-commit hooks using `prek`. If updates are found, i
 - **Trigger**: Intended to be called by a schedule or manual trigger in the target repo.
 - **Key Feature**: Uses `uv run --with prek` to avoid polluting the project's permanent dependencies.
 
+#### PR Preview:
+> ## 🚀 Pre-commit Hook Updates
+>
+> Update pre-commit hooks using \`prek autoupdate\`.
+>
+> ### ✅ Applied Updates
+> - **ruff-pre-commit**: `v0.1.0` → `v0.2.0`
+> - **uv-pre-commit**: `0.9.1` → `0.9.5`
+>
+> <details>
+> <summary>🔍 View 4 unchanged hooks</summary>
+>
+> - typos
+> - check-jsonschema
+> - ...
+> </details>
+
 ### 2. Standard CI (`reusable-ci.yml`)
 A standard pipeline for Python projects that performs the following steps:
 1. Environments setup via `uv`.
