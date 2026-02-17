@@ -47,34 +47,40 @@ jobs:
         run: |
           BRANCH_NAME="${{ inputs.branch_name }}"
           
-          # 1. Detect Default Branch (main vs master)
           DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
           echo "Detected default branch: $DEFAULT_BRANCH"
 
-          # 2. Check for changes in YAML or TOML
-          # Using 2>/dev/null ensures it doesn't error if one file is missing
           if [ -z "$(git status --porcelain .pre-commit-config.y*ml prek.toml 2>/dev/null)" ]; then
             echo "No changes detected. Skipping PR creation."
             exit 0
           fi
 
-          # 3. Configure Git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 4. Prepare the branch properly
+          # Stage changes before stashing to ensure they are tracked
+          git add .pre-commit-config.y*ml prek.toml 2>/dev/null || true
           git stash
           git checkout "$DEFAULT_BRANCH"
           git pull origin "$DEFAULT_BRANCH"
           git checkout -B "$BRANCH_NAME"
-          git stash pop
+          
+          # Use || true in case stash pop has minor conflicts or nothing to apply
+          git stash pop || true
 
-          # 5. Commit and Push
+          # Re-add changes after pop
           git add .pre-commit-config.y*ml prek.toml 2>/dev/null || true
-          git commit -m "chore(deps): update pre-commit hooks"
-          git push origin "$BRANCH_NAME" --force
 
-          # 6. Parse the UPDATE_LOG for the PR body
+          # Only commit if there are actual differences now
+          if ! git diff --cached --exit-code; then
+            git commit -m "chore(deps): update pre-commit hooks"
+            git push origin "$BRANCH_NAME" --force
+          else
+            echo "Changes already exist in $DEFAULT_BRANCH. Nothing to commit."
+            exit 0
+          fi
+
+          # Parse UPDATE_LOG
           UPDATES=$(echo "$UPDATE_LOG" | grep "updating" | sed -E "s/.*\/([^/]+)\] updating (.*) -> (.*)/- **\1**: \`\2\` → \`\3\`/" || true)
           UNCHANGED=$(echo "$UPDATE_LOG" | grep "already up to date" | sed -E "s/.*\/([^/]+)\] .*/- \1/" || true)
           UNCHANGED_COUNT=$(echo "$UNCHANGED" | grep -c "^-" || echo 0)
@@ -101,14 +107,11 @@ jobs:
 
           PR_BODY=$(cat pr_body.txt)
 
-          # 7. Create or Update PR
           EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --base "$DEFAULT_BRANCH" --json number --jq '.[0].number')
           
           if [ -n "$EXISTING_PR" ]; then
-            echo "Updating existing PR #$EXISTING_PR"
             gh pr edit "$EXISTING_PR" --body "$PR_BODY"
           else
-            echo "Creating new PR"
             gh pr create \
               --title "chore(deps): update pre-commit hooks" \
               --body "$PR_BODY" \
