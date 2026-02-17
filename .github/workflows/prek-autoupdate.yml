@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Fetches all history for all branches and tags
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
