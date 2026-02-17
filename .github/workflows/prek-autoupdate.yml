@@ -42,30 +42,31 @@ jobs:
         run: |
           BRANCH_NAME="${{ inputs.branch_name }}"
           
-          # 1. Check if files actually changed
+          # 1. Detect Default Branch (main vs master)
+          DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
+          echo "Detected default branch: $DEFAULT_BRANCH"
+
+          # 2. Check for changes
           if [ -z "$(git status --porcelain .pre-commit-config.y*ml)" ]; then
             echo "No changes detected. Skipping PR creation."
             exit 0
           fi
 
-          # 2. Configure Git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 3. Prepare the branch properly
-          # Stash changes, move to a clean state of main, then apply changes on the new branch
+          # 3. Secure the state
           git stash
-          git checkout main
-          git pull origin main
+          git checkout "$DEFAULT_BRANCH"
+          git pull origin "$DEFAULT_BRANCH"
           git checkout -B "$BRANCH_NAME"
           git stash pop
 
-          # 4. Commit and Push
           git add .pre-commit-config.y*ml
           git commit -m "chore(deps): update pre-commit hooks"
           git push origin "$BRANCH_NAME" --force
 
-          # 5. Parse the UPDATE_LOG
+          # 4. Parse the UPDATE_LOG
           UPDATES=$(echo "$UPDATE_LOG" | grep "updating" | sed -E "s/.*\/([^/]+)\] updating (.*) -> (.*)/- **\1**: \`\2\` → \`\3\`/" || true)
           UNCHANGED=$(echo "$UPDATE_LOG" | grep "already up to date" | sed -E "s/.*\/([^/]+)\] .*/- \1/" || true)
           UNCHANGED_COUNT=$(echo "$UNCHANGED" | grep -c "^-" || echo 0)
@@ -92,8 +93,7 @@ jobs:
 
           PR_BODY=$(cat pr_body.txt)
 
-          # 6. Create or Update PR
-          # Use 'gh pr list' to check existence reliably
+          # 5. Create or Update PR
           EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
           
           if [ -n "$EXISTING_PR" ]; then
@@ -103,6 +103,6 @@ jobs:
               --title "chore(deps): update pre-commit hooks" \
               --body "$PR_BODY" \
               --head "$BRANCH_NAME" \
-              --base main \
+              --base "$DEFAULT_BRANCH" \
               --label "dependencies"
           fi
