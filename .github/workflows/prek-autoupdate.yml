@@ -20,16 +20,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # Fetches all history for all branches and tags
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: |
-            **/uv.lock
-            **/requirements*.txt
-            .pre-commit-config.y*ml
 
       - name: Run prek autoupdate
         id: autoupdate
@@ -40,38 +36,40 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_ENV"
 
-      - name: Check for changes
-        id: git-check
-        run: |
-          if [ -n "$(git status --porcelain .pre-commit-config.y*ml)" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Create Pull Request
-        if: steps.git-check.outputs.changed == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH_NAME="${{ inputs.branch_name }}"
+          
+          # 1. Check if files actually changed
+          if [ -z "$(git status --porcelain .pre-commit-config.y*ml)" ]; then
+            echo "No changes detected. Skipping PR creation."
+            exit 0
+          fi
+
+          # 2. Configure Git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Force reset to main and create/reset the bot branch
+          # 3. Prepare the branch properly
+          # Stash changes, move to a clean state of main, then apply changes on the new branch
+          git stash
+          git checkout main
+          git pull origin main
           git checkout -B "$BRANCH_NAME"
+          git stash pop
+
+          # 4. Commit and Push
           git add .pre-commit-config.y*ml
           git commit -m "chore(deps): update pre-commit hooks"
-
           git push origin "$BRANCH_NAME" --force
 
-          # Parse the UPDATE_LOG to extract signal from noise
-          # Use escaped backticks to satisfy shellcheck SC2016
+          # 5. Parse the UPDATE_LOG
           UPDATES=$(echo "$UPDATE_LOG" | grep "updating" | sed -E "s/.*\/([^/]+)\] updating (.*) -> (.*)/- **\1**: \`\2\` → \`\3\`/" || true)
           UNCHANGED=$(echo "$UPDATE_LOG" | grep "already up to date" | sed -E "s/.*\/([^/]+)\] .*/- \1/" || true)
           UNCHANGED_COUNT=$(echo "$UNCHANGED" | grep -c "^-" || echo 0)
 
-          # Construct PR body in a YAML-safe way using a heredoc or multiple echos
           {
             echo "## 🚀 Pre-commit Hook Updates"
             echo ""
@@ -94,11 +92,17 @@ jobs:
 
           PR_BODY=$(cat pr_body.txt)
 
-          # Create PR if it doesn't exist, otherwise update the body of the existing one
-          gh pr create \
-            --title "chore(deps): update pre-commit hooks" \
-            --body "$PR_BODY" \
-            --head "$BRANCH_NAME" \
-            --base main \
-            --label "dependencies" || \
-          gh pr edit "$BRANCH_NAME" --body "$PR_BODY"
+          # 6. Create or Update PR
+          # Use 'gh pr list' to check existence reliably
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+          
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr edit "$EXISTING_PR" --body "$PR_BODY"
+          else
+            gh pr create \
+              --title "chore(deps): update pre-commit hooks" \
+              --body "$PR_BODY" \
+              --head "$BRANCH_NAME" \
+              --base main \
+              --label "dependencies"
+          fi
