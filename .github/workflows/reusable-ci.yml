@@ -18,7 +18,7 @@ jobs:
               run: uv sync --all-extras --dev
 
             - name: Run pre-commit hooks
-              uses: j178/prek-action@v1
+              uses: j178/prek-action@v2
 
             - name: Run tests
               run: uv run pytest
